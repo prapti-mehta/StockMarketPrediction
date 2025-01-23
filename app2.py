@@ -72,7 +72,7 @@ if data is not None:
     plt.figure(figsize=(10,6))
     plt.plot(data['Close'], label='Close Price')
     plt.xlabel('Date')
-    plt.ylabel('Price ($)')
+    plt.ylabel('Price')
     plt.title(f'{ticker} Stock Price Over Time')
     plt.legend()
     st.pyplot(plt)
