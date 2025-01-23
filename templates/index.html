@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Prediction & Portfolio Optimization</title>
+</head>
+<body>
+    <h1>Stock Prediction and Portfolio Optimization</h1>
+    
+    <h2>Stock Prediction</h2>
+    <form action="/predict" method="post">
+        <label for="stock_ticker">Enter Stock Ticker (e.g., AAPL, MSFT): </label>
+        <input type="text" id="stock_ticker" name="stock_ticker" required>
+        <button type="submit">Predict</button>
+    </form>
+    
+    {% if show_prediction %}
+    <h3>Prediction for {{ stock_ticker }}:</h3>
+    <p>Mean Squared Error: {{ mse }}</p>
+    <p>R-squared: {{ r2 }}</p>
+    {% endif %}
+
+    <h2>Portfolio Optimization</h2>
+    <form action="/optimize_portfolio" method="post">
+        <label for="stocks">Select Stocks: </label>
+        <select name="stocks" multiple>
+            <option value="AAPL">AAPL</option>
+            <option value="MSFT">MSFT</option>
+            <option value="RELIANCE.NS">RELIANCE.NS</option>
+            <option value="TCS.NS">TCS.NS</option>
+            <option value="INFY.NS">INFY.NS</option>
+        </select>
+        <button type="submit">Optimize Portfolio</button>
+    </form>
+    
+    {% if show_portfolio %}
+    <h3>Optimized Portfolio Allocation:</h3>
+    <ul>
+        {% for stock, weight in cleaned_weights.items() %}
+            <li>{{ stock }}: {{ weight }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</body>
+</html>
