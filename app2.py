@@ -4,13 +4,17 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.svm import SVR
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 from pypfopt.efficient_frontier import EfficientFrontier
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.expected_returns import mean_historical_return
 
-#fetch stock data
+# Function to fetch stock data
 def fetch_stock_data(ticker, start_date, end_date):
     try:
         data = yf.download(ticker, start=start_date, end=end_date)
@@ -19,21 +23,36 @@ def fetch_stock_data(ticker, start_date, end_date):
         st.error(f"Error fetching data for {ticker}: {e}")
         return None
 
-#predict stock price
-def predict_stock_price(data):
+# Function to evaluate different regression models
+def evaluate_models(data):
     x = data[['Open', 'High', 'Low', 'Volume']]
     y = data['Close']
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
 
-    model = RandomForestRegressor()
-    model.fit(x_train, y_train)
-    y_pred = model.predict(x_test)
+    models = {
+        "Linear Regression": LinearRegression(),
+        "Decision Tree": DecisionTreeRegressor(),
+        "Random Forest": RandomForestRegressor(),
+        "SVR": SVR(),
+        "KNN": KNeighborsRegressor()
+    }
 
-    mse = mean_squared_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
-    return mse, r2, model
+    results = []
 
-# Portfolio optimization
+    for name, model in models.items():
+        try:
+            model.fit(x_train, y_train)
+            y_pred = model.predict(x_test)
+            mse = mean_squared_error(y_test, y_pred)
+            r2 = r2_score(y_test, y_pred)
+            results.append({"Model": name, "MSE": mse, "R²": r2})
+        except Exception as e:
+            results.append({"Model": name, "MSE": np.nan, "R²": np.nan})
+            st.warning(f"{name} failed: {e}")
+    
+    return results, models.get("Random Forest")
+
+# Function to optimize portfolio
 def optimize_portfolio(stocks, start_date, end_date):
     try:
         data = yf.download(stocks, start=start_date, end=end_date)
@@ -56,31 +75,36 @@ def optimize_portfolio(stocks, start_date, end_date):
         st.error(f"Error during portfolio optimization: {e}")
         return None, None
 
-# Streamlit App
-st.title('Stock Price Prediction and Portfolio Optimization')
-st.subheader('Stock Price Prediction')
+# Streamlit App UI
+st.title('📈 Stock Price Prediction and Portfolio Optimization')
 
-# Input
-ticker = st.text_input("Enter Stock Ticker (e.g., AAPL, MSFT, TSLA)", "AAPL")
+# --- Stock Prediction Section ---
+st.subheader('🔍 Stock Price Prediction')
+
+ticker = st.text_input("Enter Stock Ticker", "AAPL")
 start_date = st.date_input("Start Date", pd.to_datetime('2020-01-01'))
 end_date = st.date_input("End Date", pd.to_datetime('2025-01-01'))
 
-# display stock data
 data = fetch_stock_data(ticker, start_date, end_date)
+
 if data is not None:
-    st.markdown('<h3 style="font-size: 18px;">Stock Price Over Time</h4>', unsafe_allow_html=True)
-    plt.figure(figsize=(10,6))
-    plt.plot(data['Close'], label='Close Price')
-    plt.xlabel('Date')
-    plt.ylabel('Price')
-    plt.title(f'{ticker} Stock Price Over Time')
+    st.markdown('#### Stock Closing Price Over Time')
+    plt.figure(figsize=(10, 5))
+    plt.plot(data['Close'], label='Close')
+    plt.title(f'{ticker} Stock Price')
+    plt.xlabel("Date")
+    plt.ylabel("Price")
     plt.legend()
     st.pyplot(plt)
 
-    st.markdown(f'<h3 style="font-size: 18px;">Predict {ticker} Stock Price</h4>', unsafe_allow_html=True)
-    mse, r2, model = predict_stock_price(data)
-    st.write(f"Model Performance: MSE: {mse:.2f}, R²: {r2:.2f}")
+    # Evaluate multiple models
+    st.markdown('#### Model Performance Comparison')
+    results, best_model = evaluate_models(data)
+    results_df = pd.DataFrame(results)
+    st.dataframe(results_df.style.highlight_max(axis=0, subset=['R²'], color='lightgreen'))
 
+    # Predict future price
+    st.markdown('#### Predict Future Price (Using Random Forest)')
     future_data = pd.DataFrame({
         'Open': [data['Open'].iloc[-1]],
         'High': [data['High'].iloc[-1]],
@@ -88,32 +112,32 @@ if data is not None:
         'Volume': [data['Volume'].iloc[-1]]
     })
 
-    predicted_price = model.predict(future_data)[0]
-    days_ahead = st.number_input("Predict Price for X Days Ahead:", min_value=1, max_value=365, value=1)
-    st.write(f"Prediction for {days_ahead} day(s) ahead: {predicted_price * (1 + np.random.uniform(-0.05, 0.05)):.2f}")
+    days_ahead = st.slider("Days Ahead to Predict", 1, 30, 1)
+    predicted_price = best_model.predict(future_data)[0]
+    random_noise = np.random.uniform(-0.03, 0.03)
+    st.write(f"Predicted price after {days_ahead} day(s): ${(predicted_price * (1 + random_noise)):.2f}")
 
-# Portfolio optimization 
-st.subheader("Portfolio Optimization")
-stocks = st.multiselect("Select Stocks for Portfolio Optimization", ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'TSLA', 'INFY.NS', 'TCS.NS', 'RELIANCE.NS'])
+# --- Portfolio Optimization Section ---
+st.subheader("📊 Portfolio Optimization")
+
+stocks = st.multiselect("Select Stocks", ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'TSLA', 'INFY.NS', 'TCS.NS', 'RELIANCE.NS'])
 portfolio_start_date = st.date_input("Portfolio Start Date", pd.to_datetime('2015-01-01'))
 portfolio_end_date = st.date_input("Portfolio End Date", pd.to_datetime('2025-01-01'))
 
-if len(stocks) > 0:
+if stocks:
     cleaned_weights, performance = optimize_portfolio(stocks, portfolio_start_date, portfolio_end_date)
-    if cleaned_weights is not None:
-        st.write("Optimized Portfolio Weights:")
+    if cleaned_weights:
+        st.markdown("#### Optimized Portfolio Weights")
         st.write(cleaned_weights)
 
-        st.write("Portfolio Performance:")
-        st.write(f"Expected annual return: {performance[0]*100:.2f}%")
-        st.write(f"Annual volatility: {performance[1]*100:.2f}%")
+        st.markdown("#### Portfolio Performance")
+        st.write(f"Expected Annual Return: {performance[0]*100:.2f}%")
+        st.write(f"Annual Volatility: {performance[1]*100:.2f}%")
         st.write(f"Sharpe Ratio: {performance[2]:.2f}")
 
-        # Plotting the optimal portfolio allocation
-        st.subheader("Optimal Portfolio Allocation")
-        plt.figure(figsize=(10,6))
+        # Plot
+        plt.figure(figsize=(10, 6))
         plt.bar(cleaned_weights.keys(), cleaned_weights.values())
         plt.title("Optimal Portfolio Allocation")
         plt.ylabel("Proportion")
-        plt.xlabel("Stocks")
         st.pyplot(plt)
